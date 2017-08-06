@@ -2,42 +2,32 @@ import pandas
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
-from scipy.stats import t
+import scipy.stats as stats
+import DataHelper as dh
+import PlotHelper as ph
 
-DISPLAY_DELTAS = True
-DELTA_GAP = 4
-start_train = 1
+DISPLAY_DELTAS = False
+DELTA_GAP = 1
+load_from_file = False
 
-data_dir = 'C:/Users/Jack/Documents/Thesis/data/'
-
-results_file = data_dir + 'consumer_spending.csv'
-results = pandas.read_csv(results_file)
-results = results.iloc[start_train:,0].ravel()
+data = dh.get_all_data(load_from_file)
+results = data['PCECC96']
+results = results.ravel()
 num_results = results.shape[0]
-deltas = np.zeros([num_results-DELTA_GAP])
-for i in range(num_results-DELTA_GAP):
-    deltas[i] = results[i+DELTA_GAP] - results[i]
 
-title = 'distribution of growth rates'
-if DISPLAY_DELTAS:
-    results = deltas
-    title ='distribution of quarter to quarter change in growth rates'
+title = 'Distribution of Quarterly Consumer Spending Growth Rates Since 1947'
+xlabel = 'Consumer Spending Growth %'
+ph.draw_hist(results, title, xlabel)
 
-min_val = min(results)
-max_val = max(results)
-plt.figure(1)
-plt.hist(results, 30, normed=True)
-plt.xlim(min_val, max_val)
-plt.title(title)
-mean_val = np.mean(results)
-std = np.std(results)
-print('mean: ' + str(mean_val))
-print('std: ' + str(std))
-x = np.linspace(min_val, max_val, 100)
-#x_shifted = np.linspace(min_val- mean_val, max_val - mean_val, 100)
-#tdof, tloc, tscale = t.fit(results)
-#plt.plot(x, t.pdf(x_shifted, 0.1))
-plt.plot(x, mlab.normpdf(x, mean_val, std))
 
 plt.show()
 
+plt.figure(2)
+shifted = results[1:]
+results = results[:-1]
+plt.scatter(results, shifted)
+plt.xlabel('Consumer Spending Growth period t %')
+plt.ylabel('Consumer Spending Growth period t+1 %')
+plt.title('Auto-Correlation of Spending from One Quarter to Next')
+plt.show()
+print('correlation: ' + str(np.corrcoef(results, shifted)[0,1]))

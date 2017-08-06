@@ -1,52 +1,74 @@
-import pandas
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn import svm
 from sklearn import preprocessing
 from sklearn import ensemble
 from sklearn import metrics
+from scipy.stats import linregress
 from timeit import default_timer as timer
+import DataHelper as dh
+import dateutil
+import PlotHelper as ph
+#import center_spines as cs
 
-start = timer()
-FORECAST_QUARTERS = 2
+START_TEST_DATE = dateutil.parser.parse("2007-01-01")
+SHOW_GRAPHS = False
+LOAD_FROM_FILE = True
 
-data_dir = 'C:/Users/Jack/Documents/Thesis/data/'
-data_file = data_dir + 'input_data_full.csv'
-#data_file = data_dir + 'InputData_small.csv'
-results_file = data_dir + 'consumer_spending.csv'
-#results_file = data_dir + 'Fake_Results.csv'
-
-data = pandas.read_csv(data_file)
-results = pandas.read_csv(results_file)
-num_data_items = data.shape[0]
-print(data)
-num_columns = data.shape[1]
-titles = data.columns
-dates = data.iloc[FORECAST_QUARTERS:,0]
-data = data.iloc[:num_data_items - FORECAST_QUARTERS,1:num_columns-1]
-results = results.iloc[FORECAST_QUARTERS:,0].ravel()
-
-num_columns = data.shape[1]
-for i in range(0, 1):
+def get_corr_for_one(data, results, titles, i):
     one_factor = data.iloc[:,i]
+    one_factor = np.reshape(one_factor.values, [1, -1])[0]
+    one_factor = one_factor.reshape(-1,1)
 
     #normalise columns
     scaler = preprocessing.StandardScaler().fit(one_factor)
     scaled_factor = scaler.transform(one_factor)
+    correlation = np.corrcoef(results.ravel(), scaled_factor.ravel())[0,1]
+    tmp = linregress(results.ravel(), scaled_factor.ravel())
+    print(tmp)
+    # FRED Key & Series Name & Corr 1 fwd  & Corr 4 fwd & Delta Corr 1 fwd & Delta Corr 4 fwd \\
+    if SHOW_GRAPHS:
+        if abs(correlation) > 0.18:
+            ph.plot_one(scaled_factor, results, titles, i, correlation)
+    return str(np.round(correlation,3))
 
-    plt.figure(i)
-    # plt.plot(dates, one_factor, label='factor')
-    # plt.plot(dates, scaled_factor, label='scaled factor')
-    # plt.plot(dates, results, label='results')
-    plt.scatter(one_factor, results)
-    plt.xlabel('date')
-    plt.ylabel('growth %')
-    plt.legend()
-    correlation = np.corrcoef(results, scaled_factor)
-    plt.title(str(titles[i]) + ': correlation = ' + str(correlation[0,1]))
-    print('iteration: ' + str(i) + ' completed')
+def check_one_forecast_gap(data, forecast_quarters):
 
-end = timer()
-print('finished in: ' + str(end - start))
-plt.show()
+    results = data['PCECC96'].shift(-forecast_quarters)
+    titles = data.columns
+    data = data[:-forecast_quarters]
+    results = results[:-forecast_quarters]
+    # data['cs_shifted'] = results
+    # data.to_csv('../data/cs_compare.csv')
+    results = results.reshape(-1, 1)
+    num_columns = data.shape[1]
+    num_orig_columns = int(num_columns / 2)
+    correlations = np.zeros([num_orig_columns, 1])
+    delta_correlations = np.zeros([num_orig_columns, 1])
 
+    for i in range(num_columns):
+        if i >= num_orig_columns:
+            delta_correlations[i - num_orig_columns, 0] = get_corr_for_one(data, results, titles, i)
+        else:
+            correlations[i, 0] = get_corr_for_one(data, results, titles, i)
+
+    return [correlations, delta_correlations]
+
+
+def DisplayFactors():
+
+    data = dh.get_all_data(LOAD_FROM_FILE)
+    titles = data.columns
+    data = data[data.index < START_TEST_DATE]
+    check_one_forecast_gap(data, 1)
+    [corr_1fwd,corr_1fwd_delta] = check_one_forecast_gap(data, 1)
+    [corr_4fwd, corr_4fwd_delta] = check_one_forecast_gap(data, 4)
+
+    for i in range(corr_1fwd.shape[0]):
+        print(titles[i] + ' & pch & ' + str(corr_1fwd[i,0]) + ' &  ' + str(corr_1fwd_delta[i,0]) + ' &  ' + str(corr_4fwd[i,0]) + ' & ' + str(corr_4fwd_delta[i,0]) + ' \\\\')
+
+    ph.draw_hist(corr_1fwd, '1 Period Forward Correlations Between Input Variables and Target', 'Correlation Coefficient')
+    plt.show()
+
+DisplayFactors()
