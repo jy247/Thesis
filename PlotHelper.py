@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
+from mpl_toolkits.mplot3d import Axes3D
+from scipy.interpolate import griddata
+
 
 def draw_hist(results, title, xlabel):
     min_val = min(results)
@@ -32,13 +35,33 @@ def central_axis(ax):
     ax.xaxis.set_ticks_position('bottom')
     ax.yaxis.set_ticks_position('left')
 
-def plot_one_scatter(scaled_factor, results, titles, i, correlation):
+def plot_one_scatter(series1, series2, title, plot_index):
 
-    fig = plt.figure(i)
+    fig = plt.figure(plot_index)
     ax = fig.add_subplot(1, 1, 1)
-    ax.scatter(scaled_factor, results)
+    ax.scatter(series1, series2)
     central_axis(ax)
 
-    plt.title(str(titles[i]) + ': correlation = ' + str(correlation))
-    plt.savefig('../Images/correlations/fwd_1/corr1_' + str(i) + '.png')
-    print('iteration: ' + str(i) + ' completed')
+    correlation = np.corrcoef(series1.ravel(), series2.ravel())[0, 1]
+    plt.title(title)
+    plt.savefig('../Images/correlations/fwd_1/corr1_' + str(plot_index) + '.png')
+    #('iteration: ' + str(plot_index) + ' completed')
+
+def plot_surf(x, y, z, plot_index):
+
+    fig = plt.figure(plot_index)
+    ax = fig.add_subplot(111, projection='3d')
+
+    # re-create the 2D-arrays
+    z = np.abs(z)
+    x1 = np.linspace(x[0], x[-1], len(x))
+    y1 = np.linspace(y[0], y[-1], len(y))
+    x2, y2 = np.meshgrid(x1, y1)
+    z2 = griddata((x, y), z, (x2, y2))
+
+    ax.plot_surface(x2, y2, z2)
+    ax.set_xlabel('C')
+    ax.set_ylabel('Epsilon')
+    ax.set_zlabel('Cost')
+
+    plt.show()

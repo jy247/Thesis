@@ -1,6 +1,6 @@
 from fredapi import Fred
 import pandas as pd
-import datetime
+import numpy as np
 
 API_KEY = '5f1fcf42828a0577bb4c032324131951'
 FREQUENCY = 'q'
@@ -19,8 +19,8 @@ column_config = {
     'TOTALSA': 'pch', #total vehicle sales
     'M2' : 'pch', #m2 money supply
     #'BAA10Y' : 'lin', #corporate bond spread
-    'FF' : 'pch', #fed funds rate
-    'DGS10' : 'pch', #10Y yield
+    #'FF' : 'pch', #fed funds rate
+    'T10Y3M' : 'pch', #10Y yield
     'UMCSENT' : 'pch', #consumer sentiment
     'USTRADE' : 'pch', #All Employees: Retail Trade
     'CPIAUCSL' : 'pch', #Consumer Price Index for All Urban Consumers: All Items
@@ -54,10 +54,15 @@ def get_experts(load_from_file):
     return experts
 
 
-def get_all_data(load_from_file):
+def get_all_data(load_from_file, return_deltas):
+
+    if return_deltas:
+        filename = '../data/input_data_no_deltas.csv'
+    else:
+        filename = '../data/input_data.csv'
 
     if load_from_file:
-        df = pd.read_csv('../data/input_data.csv', index_col='Date')
+        df = pd.read_csv(filename, index_col='Date')
         df.index = pd.to_datetime(df.index)
     else:
         df = pd.DataFrame()
@@ -68,10 +73,12 @@ def get_all_data(load_from_file):
             print('loaded: ' + key + ' start date: ' + str(one_series.index[0]))
             i += 1
 
-        df = get_deltas(df)
+        if return_deltas:
+            df = get_deltas(df)
+
         df = df.dropna()
         df = df.rename_axis('Date')
-        df.to_csv('../data/input_data.csv')
+        df.to_csv(filename)
 
     return(df)
 
@@ -86,5 +93,20 @@ def get_deltas(df):
         i += 1
 
     return df
+
+def hinge_loss(actual, predicted, epsilon):
+    diff = actual - predicted
+    diff = abs(diff) - epsilon
+    diff = np.maximum(diff, 0)
+    loss = np.sum(diff)
+    return loss / len(diff)
+
+def right_direction_score(actual, predicted):
+    score = 0
+    for i in range(1,actual.shape[0]):
+        correct_param = (actual[i] - actual[i-1]) * (predicted[i] - predicted[i-1])
+        if correct_param > 0:
+            score += 1
+    return score / (actual.shape[0] - 1)
 
 #get_all_data(False)
