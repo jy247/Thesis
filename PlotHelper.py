@@ -35,16 +35,18 @@ def central_axis(ax):
     ax.xaxis.set_ticks_position('bottom')
     ax.yaxis.set_ticks_position('left')
 
-def plot_one_scatter(series1, series2, title, plot_index):
+def plot_one_scatter(series1, series2, title,  plot_index, xlabel = '', ylabel = ''):
 
     fig = plt.figure(plot_index)
     ax = fig.add_subplot(1, 1, 1)
     ax.scatter(series1, series2)
-    central_axis(ax)
+    #central_axis(ax)
 
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
     correlation = np.corrcoef(series1.ravel(), series2.ravel())[0, 1]
     plt.title(title)
-    plt.savefig('../Images/correlations/fwd_1/corr1_' + str(plot_index) + '.png')
+    #plt.savefig('../Images/correlations/fwd_1/corr1_' + str(plot_index) + '.png')
     #('iteration: ' + str(plot_index) + ' completed')
 
 def plot_surf(x, y, z, plot_index):

@@ -11,6 +11,7 @@ from sklearn import gaussian_process
 from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import make_pipeline
 from sklearn.gaussian_process import kernels
+from sklearn.metrics import make_scorer
 from timeit import default_timer as timer
 import DataHelper as dh
 import ModelHelper as mh
@@ -18,10 +19,11 @@ import PlotHelper as ph
 import dateutil
 
 start = timer()
-load_from_file = False
-MODEL_TYPE = mh.LIN
-FORECAST_QUARTERS = 4
-DO_X_Valid = True
+LOAD_FROM_FILE = True
+LOAD_DELTAS = True
+MODEL_TYPE = mh.RBF
+FORECAST_QUARTERS = 1
+DO_X_Valid = False
 DO_TEST = True
 X_VALID_QUARTERS = 1
 EXPORT_X_VALID = False
@@ -36,12 +38,12 @@ ROLLING_WINDOW = True
 USE_SEASONS = False
 USE_GPR = False
 
-examine_residuals = False
+examine_residuals = True
 START_TEST_DATE = dateutil.parser.parse("2007-01-01")
 target_col = 'PCECC96'
 
 def get_gamma_range():
-    if MODEL_TYPE == mh.RBF:
+    if MODEL_TYPE == mh.Rand_F:
         return 6
     else:
         return 1
@@ -53,6 +55,12 @@ def shift_data_one_quarter(data, results):
     results = results[:-1]
     return data, results
 
+def residuals_correlation_score(y_true, y_pred):
+    residuals  = y_true - y_pred
+    correlation = np.corrcoef(residuals, y_pred)
+    score = abs(correlation[0, 1]) + sum(abs(y_true - y_pred)) * 0.01
+    return score
+
 def do_x_validation(data, results):
 
     best_sum_score = float('-inf')
@@ -63,6 +71,7 @@ def do_x_validation(data, results):
     all_epsilon = []
     all_score = []
     all_gamma = []
+    #residuals_correlation_scorer = make_scorer(residuals_correlation_score)
     for i in range(X_VALID_QUARTERS):
         data, results = shift_data_one_quarter(data, results)
 
@@ -79,7 +88,7 @@ def do_x_validation(data, results):
             low_c = best_c - (3 * c_increment)
 
         for c_factor in range(6):
-            for epsilon_factor in range(16):
+            for epsilon_factor in range(1):
                 for gamma_factor in range(get_gamma_range()):
 
                     if precision_loop == 0:
@@ -94,7 +103,9 @@ def do_x_validation(data, results):
 
                     model = mh.get_model(MODEL_TYPE, c, epsilon, gamma)
                     pipeline = make_pipeline(preprocessing.StandardScaler(), model)
+
                     scores = cross_val_score(pipeline, data, results, cv=5, scoring=X_VALID_SCORE_MODEL)
+
                     all_c.append(c)
                     all_epsilon.append(epsilon)
                     all_gamma.append(gamma)
@@ -210,6 +221,17 @@ def process_predictions(all_predictions, true_values_test, dates_test, model, i,
 
     # cheat by adjusting the mean and std of the predictions
     # mean_true = np.mean(true_values_test)
+    # print(mean_true)
+    # means = np.ones([len(all_predictions)]) * mean_true
+    # mse = metrics.mean_squared_error(true_values_test, means)
+    # mae = metrics.mean_absolute_error(true_values_test, means)
+    # hinge = dh.hinge_loss(true_values_test, means, 0.5)
+    # correlation = np.corrcoef(true_values_test, means)[0,1]
+    # print(mse)
+    # print(mae)
+    # print(hinge)
+    # print(correlation)
+
     # mean_predicted = np.mean(all_predictions)
     # all_predictions = all_predictions - mean_predicted + mean_true
     # sd_true = np.std(true_values_test)
@@ -237,12 +259,14 @@ def process_predictions(all_predictions, true_values_test, dates_test, model, i,
     mse = metrics.mean_squared_error(true_values_test, all_predictions)
     mae = metrics.mean_absolute_error(true_values_test, all_predictions)
     expert_mse = metrics.mean_squared_error(true_values_test, experts_test)
+    expert_mae = metrics.mean_absolute_error(true_values_test, experts_test)
 
     try:
-        epsilon = model.get_params()['epsilon']
-        hinge_loss = dh.hinge_loss(true_values_test, all_predictions, epsilon)
-        expert_hinge_loss = dh.hinge_loss(true_values_test, experts_test.values, epsilon)
+        #epsilon = model.get_params()['epsilon']
+        hinge_loss = dh.hinge_loss(true_values_test, all_predictions, 0.5)
+        expert_hinge_loss = dh.hinge_loss(true_values_test, experts_test.values, 0.5)
         hinge_loss = str(round(hinge_loss, 4))
+        expert_hinge_loss = str(round(expert_hinge_loss, 4))
     except:
         hinge_loss = ' - '
 
@@ -253,18 +277,18 @@ def process_predictions(all_predictions, true_values_test, dates_test, model, i,
     expert_r_squared = metrics.r2_score(true_values_test, experts_test.values)
 
     correlation = np.corrcoef(true_values_test, all_predictions)
-    plt.title(str(i) + ' periods forward, correlation = '
-              + str(round(correlation[0, 1],4)) + '\n score = ' + str(round(r_squared,4))
-              + ' ex_score = ' + str(round(expert_r_squared,4)))
+    expert_correlation = np.corrcoef(true_values_test, experts_test.values)
+    plt.title(str(i) + ' periods forward WITH SEASONS, Model=SVR, KERNEL=RBF') #SVR, Kernel = POLY3')
 
     title = str(i) + ' periods forward predictions, correlation = ' + str(round(np.corrcoef(all_predictions, true_values_test)[0, 1],4))
 
-    ph.plot_one_scatter(true_values_test, all_predictions, title, i + FORECAST_QUARTERS)
+    #ph.plot_one_scatter(true_values_test, all_predictions, title, i + FORECAST_QUARTERS)
 
     if examine_residuals:
         residuals = true_values_test - all_predictions
         title = str(i) + ' periods forward residuals, correlation = ' + str(round(np.corrcoef(all_predictions, residuals)[0, 1],4))
-        ph.plot_one_scatter(all_predictions, residuals, title, i + FORECAST_QUARTERS * 2)
+
+        ph.plot_one_scatter(all_predictions, residuals, title, i + FORECAST_QUARTERS * 2, 'Predicted CS Growth', 'True Value - Prediction')
 
     if MODEL_TYPE == mh.RBF:
         gamma_string = str(round(model.get_params()['gamma'],5))
@@ -279,8 +303,11 @@ def process_predictions(all_predictions, true_values_test, dates_test, model, i,
         C_string = str(round(model.get_params()['C'],4))
         model_string = model.get_params()['kernel'] + ' SVR'
 
-    print(str(i) + ' & ' + model_string + ' & ' + epsilon_string +
-          ' & ' + C_string + ' & ' + gamma_string +
+    # print(str(i) + ' & Mean Experts & - & - & - & ' + str(round(expert_mse,4)) + ' & ' + str(round(expert_mae,4)) + ' & ' + expert_hinge_loss + ' & '
+    #             + str(round(expert_correlation[0,1],4)) + ' & ' + str(round(expert_r_squared,4)))
+
+    print(str(i) + ' & ' + model_string + ' & ' + C_string +
+          ' & ' + epsilon_string + ' & ' + gamma_string +
           ' & ' + str(round(mse,4)) + ' & ' + str(round(mae,4)) + ' & ' + hinge_loss + ' & '
                 + str(round(correlation[0,1],4)) + ' & ' + str(round(r_squared,4)))
 
@@ -293,8 +320,9 @@ def main():
     experts_file = data_dir + 'experts_out.csv'
     #results_file = data_dir + 'Fake_Results.csv'
 
-    experts = dh.get_experts(load_from_file)
-    data = dh.get_all_data(load_from_file, True)
+    experts = dh.get_experts(LOAD_FROM_FILE)
+    experts_all = dh.get_experts(LOAD_FROM_FILE)
+    data = dh.get_all_data(LOAD_FROM_FILE, LOAD_DELTAS)
     results = data[target_col]
 
     num_data_items = data.shape[0]
@@ -308,6 +336,7 @@ def main():
             j = 0
 
     seasons_df = pd.DataFrame(data=season_info, columns=['SEASON_1', 'SEASON_2', 'SEASON_3', 'SEASON_4'])
+    seasons_df.index = data.index
 
     columns_to_use = ['PCECC96', 'TWEXM', 'HOUST', 'CIVPART','POP','UNRATE','PSAVERT','W875RX1','TOTALSA', 'M2','DGS10',
                       'UMCSENT', 'USTRADE','CPIAUCSL','WTISPLC','WILL5000INDFC',

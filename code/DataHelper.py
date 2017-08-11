@@ -53,6 +53,26 @@ def get_experts(load_from_file):
 
     return experts
 
+def get_all_experts(load_from_file):
+
+    if load_from_file:
+        experts = pd.read_csv('../data/ExpertsProcessed.csv', index_col='Date')
+        experts.index = pd.to_datetime(experts.index)
+    else:
+        experts = pd.read_csv('../data/ExpertsMean_In.csv')
+        experts = experts.set_index(((experts["QUARTER"] - 1) * 3 + 1).map(str) + '/1/' + experts["YEAR"].map(str))
+        experts.index = pd.to_datetime(experts.index)
+        experts = experts.rename_axis('Date')
+
+        experts['fwd1'] = 100 * (experts['RCONSUM3'] - experts['RCONSUM2']) / experts['RCONSUM2']
+        experts['fwd2'] = 100 * (experts['RCONSUM4'] - experts['RCONSUM3']) / experts['RCONSUM3']
+        experts['fwd3'] = 100 * (experts['RCONSUM5'] - experts['RCONSUM4']) / experts['RCONSUM4']
+        experts['fwd4'] = 100 * (experts['RCONSUM6'] - experts['RCONSUM5']) / experts['RCONSUM5']
+
+        experts.to_csv('../data/ExpertsProcessed.csv')
+
+    return experts
+
 
 def get_all_data(load_from_file, return_deltas):
 
