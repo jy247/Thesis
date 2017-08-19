@@ -56,22 +56,42 @@ def get_experts(load_from_file):
 def get_all_experts(load_from_file):
 
     if load_from_file:
-        experts = pd.read_csv('../data/ExpertsProcessed.csv', index_col='Date')
-        experts.index = pd.to_datetime(experts.index)
+        experts_fwd1 = pd.read_csv('../data/ExpertsProcessed_fwd1.csv', index_col='Date')
+        experts_fwd1.index = pd.to_datetime(experts_fwd1.index)
+
+        experts_fwd2 = pd.read_csv('../data/ExpertsProcessed_fwd2.csv', index_col='Date')
+        experts_fwd2.index = pd.to_datetime(experts_fwd2.index)
+        experts_fwd3 = pd.read_csv('../data/ExpertsProcessed_fwd3.csv', index_col='Date')
+        experts_fwd3.index = pd.to_datetime(experts_fwd3.index)
+        experts_fwd4 = pd.read_csv('../data/ExpertsProcessed_fwd4.csv', index_col='Date')
+        experts_fwd4.index = pd.to_datetime(experts_fwd4.index)
     else:
-        experts = pd.read_csv('../data/ExpertsMean_In.csv')
+        experts = pd.read_csv('../data/ExpertsAll.csv')
         experts = experts.set_index(((experts["QUARTER"] - 1) * 3 + 1).map(str) + '/1/' + experts["YEAR"].map(str))
         experts.index = pd.to_datetime(experts.index)
         experts = experts.rename_axis('Date')
-
         experts['fwd1'] = 100 * (experts['RCONSUM3'] - experts['RCONSUM2']) / experts['RCONSUM2']
         experts['fwd2'] = 100 * (experts['RCONSUM4'] - experts['RCONSUM3']) / experts['RCONSUM3']
         experts['fwd3'] = 100 * (experts['RCONSUM5'] - experts['RCONSUM4']) / experts['RCONSUM4']
         experts['fwd4'] = 100 * (experts['RCONSUM6'] - experts['RCONSUM5']) / experts['RCONSUM5']
 
-        experts.to_csv('../data/ExpertsProcessed.csv')
+        experts_fwd1 = experts[['ID', 'fwd1']].dropna().pivot(columns='ID')
+        experts_fwd1.columns = experts_fwd1.columns.to_series().str.join('_')
+        experts_fwd1.to_csv('../data/ExpertsProcessed_fwd1.csv')
 
-    return experts
+        experts_fwd2 = experts[['ID', 'fwd2']].dropna().pivot(columns='ID')
+        experts_fwd2.columns = experts_fwd2.columns.to_series().str.join('_')
+        experts_fwd2.to_csv('../data/ExpertsProcessed_fwd2.csv')
+
+        experts_fwd3 = experts[['ID', 'fwd3']].dropna().pivot(columns='ID')
+        experts_fwd3.columns = experts_fwd3.columns.to_series().str.join('_')
+        experts_fwd3.to_csv('../data/ExpertsProcessed_fwd3.csv')
+
+        experts_fwd4 = experts[['ID', 'fwd4']].dropna().pivot(columns='ID')
+        experts_fwd4.columns = experts_fwd4.columns.to_series().str.join('_')
+        experts_fwd4.to_csv('../data/ExpertsProcessed_fwd4.csv')
+
+    return [experts_fwd1, experts_fwd2, experts_fwd3, experts_fwd4]
 
 
 def get_all_data(load_from_file, return_deltas):
@@ -102,6 +122,7 @@ def get_all_data(load_from_file, return_deltas):
 
     return(df)
 
+
 def get_deltas(df):
 
     df_shifted = df.shift(1)
@@ -113,6 +134,25 @@ def get_deltas(df):
         i += 1
 
     return df
+
+def get_quartiles(experts):
+    upper_quartiles = np.nanpercentile(experts,75, axis=1)
+    lower_quartiles = np.nanpercentile(experts,25, axis=1)
+    medians = np.nanpercentile(experts,50, axis=1)
+    maxs = np.max(experts, axis=1)
+    mins = np.min(experts, axis=1)
+    return [mins, lower_quartiles, medians, upper_quartiles, maxs]
+
+def percentage_beaten(actual, predictions, experts):
+    diff = abs(actual - predictions)
+    percentages = np.zeros(actual.shape[0])
+
+    for i in range(actual.shape[0]):
+        beats = sum(diff[i] < abs(experts.iloc[i] - actual[i]))
+        percentages[i] = beats * 100 / experts.iloc[0].dropna().shape
+
+    return percentages
+
 
 def hinge_loss(actual, predicted, epsilon):
     diff = actual - predicted
@@ -130,3 +170,4 @@ def right_direction_score(actual, predicted):
     return score / (actual.shape[0] - 1)
 
 #get_all_data(False)
+#get_all_experts(True)

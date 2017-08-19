@@ -29,15 +29,17 @@ gp_kernel = kernels.DotProduct() \
             + kernels.WhiteKernel(1e-1)
 
 MODELS_DIC ={
-    RBF:svm.SVR(kernel='rbf', C=7, epsilon=0.4, gamma=0.001),
+    RBF:svm.SVR(kernel='rbf', C=12, epsilon=0, gamma=0.00008),
+    RBF: svm.SVR(kernel='rbf', C=90, epsilon=0.09, gamma=0.0001),
     #RBF:svm.SVR(kernel='rbf', C=6, epsilon=0.4, gamma=0.0007),
     #RBF:svm.SVR(kernel='rbf', C=5, epsilon=0.1, gamma=0.0005),
     #RBF:svm.SVR(kernel='rbf', C=1.3, epsilon=0.43, gamma=0.005),
     POLY2:svm.SVR(kernel='poly', C=1, degree=2, epsilon=1.1),
     POLY3:svm.SVR(kernel='poly', C=0.12, degree=3, epsilon=0.33),
     POLY4:svm.SVR(kernel='poly', C=0.07, degree=4, epsilon=1.2),
-    LIN:svm.SVR(kernel='linear', C=0.10, epsilon=0.5),
-    #LIN:svm.LinearSVR(C=0.0012, epsilon=0.0),
+    LIN:svm.SVR(kernel='linear', C=5, epsilon=0.3),
+    #LIN:svm.SVR(kernel='linear', C=1, epsilon=0.0), #ensemble
+    #LIN:svm.LinearSVR(C=1, epsilon=0.3),
     #LIN:svm.LinearSVR(C=0.009, epsilon=0.4),
 
     Rand_F:ensemble.RandomForestRegressor(),

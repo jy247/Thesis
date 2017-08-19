@@ -1,29 +1,24 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn import svm
 from sklearn import preprocessing
-from sklearn import ensemble
 from sklearn import metrics
-from sklearn import kernel_ridge
-from sklearn import linear_model
-from sklearn import gaussian_process
 from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import make_pipeline
-from sklearn.gaussian_process import kernels
-from sklearn.metrics import make_scorer
 from timeit import default_timer as timer
 import DataHelper as dh
 import ModelHelper as mh
 import PlotHelper as ph
 import dateutil
+from EnsembleSVR import EnsembleSVR
+from sklearn.ensemble import BaggingRegressor
 
 start = timer()
 LOAD_FROM_FILE = True
-LOAD_DELTAS = True
+LOAD_DELTAS = False
 MODEL_TYPE = mh.RBF
 FORECAST_QUARTERS = 1
-DO_X_Valid = False
+DO_X_Valid = True
 DO_TEST = True
 X_VALID_QUARTERS = 1
 EXPORT_X_VALID = False
@@ -34,11 +29,13 @@ X_VALID_SCORE_MODEL = 'r2'
 TEST_ON_TRAIN = False #test mode
 USE_SELECT_COLUMNS = False
 EXPANDING_WINDOW = True
-ROLLING_WINDOW = True
+ROLLING_WINDOW = False
 USE_SEASONS = False
 USE_GPR = False
+USE_ALL_EXPERTS = True
+USE_ENSEMBLE = True
+EXAMINE_RESIDUALS = False
 
-examine_residuals = True
 START_TEST_DATE = dateutil.parser.parse("2007-01-01")
 target_col = 'PCECC96'
 
@@ -88,7 +85,7 @@ def do_x_validation(data, results):
             low_c = best_c - (3 * c_increment)
 
         for c_factor in range(6):
-            for epsilon_factor in range(1):
+            for epsilon_factor in range(16):
                 for gamma_factor in range(get_gamma_range()):
 
                     if precision_loop == 0:
@@ -102,8 +99,11 @@ def do_x_validation(data, results):
                         c = low_c + c_increment * c_factor
 
                     model = mh.get_model(MODEL_TYPE, c, epsilon, gamma)
-                    pipeline = make_pipeline(preprocessing.StandardScaler(), model)
+                    if USE_ENSEMBLE:
+                        model = BaggingRegressor(model, max_features=10, n_estimators=20, max_samples=80)
+                        #model = EnsembleSVR(model)
 
+                    pipeline = make_pipeline(preprocessing.StandardScaler(), model)
                     scores = cross_val_score(pipeline, data, results, cv=5, scoring=X_VALID_SCORE_MODEL)
 
                     all_c.append(c)
@@ -130,14 +130,25 @@ def do_x_validation(data, results):
             df['score' + X_VALID_SCORE_MODEL + ' ' + str(X_VALID_QUARTERS)] = all_score
             df.to_csv('xvalid_analysis3.csv', index=False)
 
+    if USE_ENSEMBLE:
+        kernel = 'RBF'  #model.models[0].get_params()['kernel']
+    else:
+        kernel = model.get_params()['kernel']
 
-    print(model.get_params()['kernel'] + ' & ' + X_VALID_SCORE_MODEL + ' & ' + str(round(best_c,3)) + ' & ' + str(round(best_epsilon,3))
-          + ' & ' + str(round(best_gamma,4)) + ' & ' + str(round(best_sum_score,3)) )
+    print(kernel + ' & ' + X_VALID_SCORE_MODEL + ' & ' + str(round(best_c,3)) + ' & ' + str(round(best_epsilon,3))
+              + ' & ' + str(round(best_gamma,4)) + ' & ' + str(round(best_sum_score,3)) )
+
+
     return mh.get_model(MODEL_TYPE, best_c, best_epsilon, best_gamma)
 
-def do_test(model, data, results, experts):
+def do_test(model, data, results):
 
     print('Starting Test!')
+    base_model = model
+    if USE_ENSEMBLE:
+        #model = EnsembleSVR(model)
+        model = BaggingRegressor(model, max_features=10,n_estimators=20, max_samples=80)
+
     for i in range(FORECAST_QUARTERS):
 
         start_train = 1
@@ -206,18 +217,11 @@ def do_test(model, data, results, experts):
                 else:
                     all_predictions[j] = prediction
 
-        process_predictions(all_predictions, true_values_test, dates_test, model, i+1, experts, all_std)
+        process_predictions(all_predictions, true_values_test, dates_test, base_model, i+1, all_std)
 
-def process_predictions(all_predictions, true_values_test, dates_test, model, i, experts, all_std):
+def process_predictions(all_predictions, true_values_test, dates_test, model, fwd_index, all_std):
 
-    plt.figure(i)
     end_date = dates_test[-1]
-    # plt.scatter(predictions, y_test)
-    # plt.xlabel('predictions')
-    # plt.ylabel('actual values')
-
-    expert_col = experts['fwd' + str(i)]
-    experts_test = expert_col[(expert_col.index >= START_TEST_DATE) & (expert_col.index <= end_date)]
 
     # cheat by adjusting the mean and std of the predictions
     # mean_true = np.mean(true_values_test)
@@ -243,6 +247,13 @@ def process_predictions(all_predictions, true_values_test, dates_test, model, i,
     # sd_experts = np.std(experts_test.values)
     # experts_test = experts_test * sd_true / sd_experts
 
+    if USE_ALL_EXPERTS:
+        analyse_all_experts(dates_test,true_values_test,all_predictions,fwd_index, end_date, model.get_params()['kernel'])
+
+    plt.figure(fwd_index)
+    experts = dh.get_experts(LOAD_FROM_FILE)
+    expert_col = experts['fwd' + str(fwd_index)]
+    experts_test = expert_col[(expert_col.index >= START_TEST_DATE) & (expert_col.index <= end_date)]
     plt.plot(dates_test, experts_test, label='experts')
     plt.plot(dates_test, all_predictions, label='predictions')
     plt.plot(dates_test, true_values_test, label='actual')
@@ -278,22 +289,23 @@ def process_predictions(all_predictions, true_values_test, dates_test, model, i,
 
     correlation = np.corrcoef(true_values_test, all_predictions)
     expert_correlation = np.corrcoef(true_values_test, experts_test.values)
-    plt.title(str(i) + ' periods forward WITH SEASONS, Model=SVR, KERNEL=RBF') #SVR, Kernel = POLY3')
+    plt.title(str(fwd_index) + ' periods forward, Model=SVR, KERNEL=' + model.get_params()['kernel']) #SVR, Kernel = POLY3')
 
-    title = str(i) + ' periods forward predictions, correlation = ' + str(round(np.corrcoef(all_predictions, true_values_test)[0, 1],4))
+    title = str(fwd_index) + ' periods forward predictions, correlation = ' + str(round(np.corrcoef(all_predictions, true_values_test)[0, 1],4))
 
     #ph.plot_one_scatter(true_values_test, all_predictions, title, i + FORECAST_QUARTERS)
 
-    if examine_residuals:
+    if EXAMINE_RESIDUALS:
         residuals = true_values_test - all_predictions
-        title = str(i) + ' periods forward residuals, correlation = ' + str(round(np.corrcoef(all_predictions, residuals)[0, 1],4))
+        title = str(fwd_index) + ' periods forward residuals, correlation = ' + str(round(np.corrcoef(all_predictions, residuals)[0, 1],4))
 
-        ph.plot_one_scatter(all_predictions, residuals, title, i + FORECAST_QUARTERS * 2, 'Predicted CS Growth', 'True Value - Prediction')
+        ph.plot_one_scatter(all_predictions, residuals, title, fwd_index + FORECAST_QUARTERS * 2, 'Predicted CS Growth', 'True Value - Prediction')
 
     if MODEL_TYPE == mh.RBF:
         gamma_string = str(round(model.get_params()['gamma'],5))
     else:
         gamma_string = ' - '
+
     if MODEL_TYPE == mh.Rand_F:
         epsilon_string = ' - '
         C_string = ' - '
@@ -306,10 +318,44 @@ def process_predictions(all_predictions, true_values_test, dates_test, model, i,
     # print(str(i) + ' & Mean Experts & - & - & - & ' + str(round(expert_mse,4)) + ' & ' + str(round(expert_mae,4)) + ' & ' + expert_hinge_loss + ' & '
     #             + str(round(expert_correlation[0,1],4)) + ' & ' + str(round(expert_r_squared,4)))
 
-    print(str(i) + ' & ' + model_string + ' & ' + C_string +
+    print(str(fwd_index) + ' & ' + model_string + ' & ' + C_string +
           ' & ' + epsilon_string + ' & ' + gamma_string +
           ' & ' + str(round(mse,4)) + ' & ' + str(round(mae,4)) + ' & ' + hinge_loss + ' & '
                 + str(round(correlation[0,1],4)) + ' & ' + str(round(r_squared,4)))
+
+def analyse_all_experts(dates_test, true_values_test, all_predictions, fwd_index, end_date, kernel_string):
+
+    experts = dh.get_all_experts(LOAD_FROM_FILE)
+    expert_col = experts[fwd_index-1]
+    experts_test = expert_col[(expert_col.index >= START_TEST_DATE) & (expert_col.index <= end_date)]
+
+    labels = ['min', 'lower_quartile', 'median', 'upper_quartile', 'max' ]
+    quartiles = dh.get_quartiles(experts_test)
+    percentage_beaten = dh.percentage_beaten(true_values_test, all_predictions, experts_test)
+    fig = plt.figure(98)
+
+    plt.fill_between(dates_test, quartiles[1], quartiles[2], color='darkorange', alpha=0.4)
+    plt.fill_between(dates_test, quartiles[2], quartiles[3], color='darkorange', alpha=0.4)
+    plt.fill_between(dates_test, quartiles[0], quartiles[1], color='darkorange', alpha=0.2)
+    plt.fill_between(dates_test, quartiles[3], quartiles[4], color='darkorange', alpha=0.2)
+
+    plt.plot(dates_test, true_values_test, 'b', label='actual')
+    plt.plot(dates_test, all_predictions, 'g', label='predictions')
+    plt.ylabel("growth %")
+    plt.xlabel('Date')
+    plt.legend()
+    plt.title(str(fwd_index) + ' periods forward, Model=Ensemble SVR, KERNEL=' + kernel_string)
+
+
+    fig = plt.figure(99)
+    plt.plot(dates_test, percentage_beaten, 'r', label='percentage beaten')
+    average = np.ones(dates_test.shape[0]) * np.mean(percentage_beaten)
+    plt.plot(dates_test, average, 'b', label='average beaten')
+    plt.ylabel("% experts")
+    plt.legend()
+    plt.title('Model Prediction Closer to the True Value than % of Experts')
+
+    #plt.show()
 
 def main():
 
@@ -317,11 +363,7 @@ def main():
     #data_file = data_dir + 'input_data_full.csv'
     #data_file = data_dir + 'InputData_small.csv'
     #results_file = data_dir + 'consumer_spending.csv'
-    experts_file = data_dir + 'experts_out.csv'
     #results_file = data_dir + 'Fake_Results.csv'
-
-    experts = dh.get_experts(LOAD_FROM_FILE)
-    experts_all = dh.get_experts(LOAD_FROM_FILE)
     data = dh.get_all_data(LOAD_FROM_FILE, LOAD_DELTAS)
     results = data[target_col]
 
@@ -357,10 +399,10 @@ def main():
     if DO_X_Valid:
         model = do_x_validation(data, results)
         if DO_TEST:
-            do_test(model, data, results, experts)
+            do_test(model, data, results)
     else:
         model = mh.get_model_fixed(MODEL_TYPE)
-        do_test(model, data, results, experts)
+        do_test(model, data, results)
 
     end = timer()
     print('finished in: ' + str(end - start))
