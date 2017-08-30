@@ -1,15 +1,13 @@
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn import svm
-from sklearn import preprocessing
-from sklearn import ensemble
-from sklearn import metrics
-from scipy.stats import linregress
-from timeit import default_timer as timer
-import DataHelper as dh
 import dateutil
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import linregress
+from sklearn import preprocessing
+
+import DataHelper as dh
 import PlotHelper as ph
+
 #import center_spines as cs
 
 START_TEST_DATE = dateutil.parser.parse("2007-01-01")

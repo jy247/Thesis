@@ -1,11 +1,9 @@
-import pandas
-import numpy as np
+import dateutil
 import matplotlib.pyplot as plt
-import matplotlib.mlab as mlab
-import scipy.stats as stats
+import numpy as np
+
 import DataHelper as dh
 import PlotHelper as ph
-import dateutil
 
 DISPLAY_DELTAS = False
 DELTA_GAP = 1

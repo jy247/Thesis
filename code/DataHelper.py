@@ -122,6 +122,12 @@ def get_all_data(load_from_file, return_deltas):
 
     return(df)
 
+def shift_data_one_quarter(data, results):
+    # process for forecasting
+    data = data[:-1]
+    results = results.shift(-1)
+    results = results[:-1]
+    return data, results
 
 def get_deltas(df):
 
@@ -135,12 +141,12 @@ def get_deltas(df):
 
     return df
 
-def get_quartiles(experts):
-    upper_quartiles = np.nanpercentile(experts,75, axis=1)
-    lower_quartiles = np.nanpercentile(experts,25, axis=1)
-    medians = np.nanpercentile(experts,50, axis=1)
-    maxs = np.max(experts, axis=1)
-    mins = np.min(experts, axis=1)
+def get_quartiles(data):
+    upper_quartiles = np.nanpercentile(data,75, axis=1)
+    lower_quartiles = np.nanpercentile(data,25, axis=1)
+    medians = np.nanpercentile(data,50, axis=1)
+    maxs = np.max(data, axis=1)
+    mins = np.min(data, axis=1)
     return [mins, lower_quartiles, medians, upper_quartiles, maxs]
 
 def percentage_beaten(actual, predictions, experts):
