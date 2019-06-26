@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import griddata
-import DataHelper as dh
+import code.DataHelper as dh
 
 
 def draw_hist(results, title, xlabel):

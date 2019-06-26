@@ -5,7 +5,8 @@ from sklearn import metrics
 from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import make_pipeline
 
-import ModelHelper as mh
+import code.ModelHelper as mh
+
 np.random.seed(123456789)
 NUM_WEIGHT_BRACKETS = 4
 

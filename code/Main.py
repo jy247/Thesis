@@ -5,16 +5,16 @@ import numpy as np
 import pandas as pd
 from sklearn import metrics
 from sklearn import preprocessing
-import Valid
+import code.Valid as valid
 
-import DataHelper as dh
-import ModelHelper as mh
-import PlotHelper as ph
-from EnsembleSVR import EnsembleSVR
+import code.DataHelper as dh
+import code.ModelHelper as mh
+import code.PlotHelper as ph
+from code.EnsembleSVR import EnsembleSVR
 from sklearn.ensemble import BaggingRegressor
 
 start = timer()
-LOAD_FROM_FILE = True
+LOAD_FROM_FILE = False
 LOAD_DELTAS = False
 MODEL_TYPE = mh.LIN
 
@@ -239,16 +239,17 @@ def process_predictions(all_predictions, true_values_test, dates_test, model, fw
 
 def main():
 
-    data_dir = 'C:/Users/Jack/Documents/PycharmProjects/Thesis/data/'
+    import os
+    data_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__))) + '/data/'
+
     #data_file = data_dir + 'input_data_full.csv'
     #data_file = data_dir + 'InputData_small.csv'
     #results_file = data_dir + 'consumer_spending.csv'
     #results_file = data_dir + 'Fake_Results.csv'
-    data = dh.get_all_data(LOAD_FROM_FILE, LOAD_DELTAS)
+    data = dh.get_all_data(LOAD_FROM_FILE, LOAD_DELTAS, data_dir)
     results = data[target_col]
 
     num_data_items = data.shape[0]
-
     season_info = np.zeros([num_data_items,4])
     j = 0
     for i in range(num_data_items):
@@ -264,7 +265,7 @@ def main():
         data = pd.concat([data, seasons_df], axis=1)
 
     if DO_VALIDATION:
-        model = Valid.do_validation(data, results, MODEL_TYPE, USE_ENSEMBLE)
+        model = valid.do_validation(data, results, MODEL_TYPE, USE_ENSEMBLE)
         if DO_TEST:
             run_tests(model, data, results)
     elif DO_FUTURE_FORECAST:

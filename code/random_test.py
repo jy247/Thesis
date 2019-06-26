@@ -1,5 +1,5 @@
 import numpy as np
-import PlotHelper as ph
+import code.PlotHelper as ph
 
 correlations = np.zeros([10000,1])
 

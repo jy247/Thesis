@@ -1,6 +1,7 @@
 from fredapi import Fred
 import pandas as pd
 import numpy as np
+import datetime
 
 API_KEY = '5f1fcf42828a0577bb4c032324131951'
 FREQUENCY = 'q'
@@ -93,17 +94,24 @@ def get_all_experts(load_from_file):
 
     return [experts_fwd1, experts_fwd2, experts_fwd3, experts_fwd4]
 
+def year_quarter_string_to_datetime(year_and_quarter):
+    year = int(year_and_quarter.split('_')[0])
+    quarter = year_and_quarter.split('_')[1]
+    month = (int(quarter) - 1) * 3 + 1
+    return datetime.datetime(year, month, 1)
 
-def get_all_data(load_from_file, return_deltas):
+
+def get_all_data(load_from_file, return_deltas, data_dir):
+
 
     if return_deltas:
-        filename = '../data/input_data_no_deltas.csv'
+        filename = '{}input_data_no_deltas.csv'.format(data_dir)
     else:
-        filename = '../data/input_data.csv'
+        filename = '{}input_data_full.csv'.format(data_dir)
 
     if load_from_file:
-        df = pd.read_csv(filename, index_col='Date')
-        df.index = pd.to_datetime(df.index)
+        df = pd.read_csv(filename, index_col='DATE')
+        df.index = df.index.map(year_quarter_string_to_datetime)
     else:
         df = pd.DataFrame()
         i = 0

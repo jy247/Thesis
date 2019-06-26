@@ -5,8 +5,8 @@ import numpy as np
 from scipy.stats import linregress
 from sklearn import preprocessing
 
-import DataHelper as dh
-import PlotHelper as ph
+import code.DataHelper as dh
+import code.PlotHelper as ph
 
 #import center_spines as cs
 
